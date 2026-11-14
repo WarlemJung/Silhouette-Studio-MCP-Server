@@ -1,5 +1,5 @@
 import pytest
-import server
+from silhouette_mcp import server
 
 def test_list_presets():
     res = server.silhouette_list_page_presets()

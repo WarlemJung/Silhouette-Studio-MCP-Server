@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-import server
+from silhouette_mcp import server
 
 def test_find_studio_exe():
     exe = server._find_studio_exe()

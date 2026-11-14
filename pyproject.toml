@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "silhouette-studio-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "Production-ready Model Context Protocol (MCP) server for preparing vector cut designs (DXF/SVG/PNG) for Silhouette Studio"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,7 +13,21 @@ authors = [
     { name = "Warlem Jung" }
 ]
 keywords = ["mcp", "silhouette-studio", "silhouette-cameo", "dxf", "cutting-plotter", "vector"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: Editors :: Vector-Based"
+]
 dependencies = [
+    "defusedxml>=0.7.1",
     "ezdxf>=1.4.0",
     "fonttools>=4.40.0",
     "mcp>=1.3.0",
@@ -27,13 +41,25 @@ dev = [
     "pytest-cov>=5.0.0"
 ]
 
+[project.urls]
+Homepage = "https://github.com/WarlemJung/Silhouette-Studio-MCP-Server"
+Repository = "https://github.com/WarlemJung/Silhouette-Studio-MCP-Server"
+Issues = "https://github.com/WarlemJung/Silhouette-Studio-MCP-Server/issues"
+
 [project.scripts]
-silhouette-studio-mcp = "server:mcp.run"
+silhouette-studio-mcp = "silhouette_mcp.server:main"
 
 [tool.setuptools]
-py-modules = ["server"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["silhouette_mcp"]

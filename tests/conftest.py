@@ -3,12 +3,20 @@ import tempfile
 from pathlib import Path
 import pytest
 
-# Garante que o diretorio do servidor esta no sys.path
-SERVER_DIR = Path(__file__).resolve().parent.parent
-if str(SERVER_DIR) not in sys.path:
-    sys.path.insert(0, str(SERVER_DIR))
+# Garante que o diretorio src/ do projeto esteja no sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-import server
+from silhouette_mcp import server  # noqa: E402
+
+
+@pytest.fixture
+def fixtures_dir() -> Path:
+    """Retorna o diretorio de fixtures estaticas dos testes."""
+    return Path(__file__).resolve().parent / "fixtures"
+
 
 @pytest.fixture(autouse=True)
 def isolated_output_dir(monkeypatch):
@@ -17,4 +25,3 @@ def isolated_output_dir(monkeypatch):
         tmp_path = Path(tmpdir)
         monkeypatch.setattr(server, "OUTPUT_DIR", tmp_path)
         yield tmp_path
-

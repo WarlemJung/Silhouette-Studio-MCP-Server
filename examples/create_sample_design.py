@@ -1,9 +1,9 @@
 import sys
 from pathlib import Path
 
-# Adiciona o diretorio raiz ao path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import server
+# Adiciona o diretorio src ao path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from silhouette_mcp import server
 
 def main():
     name = "tags_presente_luxo"

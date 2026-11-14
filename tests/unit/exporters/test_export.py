@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
 import ezdxf
-import server
+from silhouette_mcp import server
 
 def test_export_dxf_and_svg():
     server.silhouette_new_design("export_sample", width_mm=210, height_mm=297)

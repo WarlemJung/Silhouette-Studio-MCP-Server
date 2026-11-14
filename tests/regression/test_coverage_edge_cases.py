@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-import server
+from silhouette_mcp import server
 
 def test_export_r12(monkeypatch):
     monkeypatch.setattr(server, "DXF_VERSION", "R12")

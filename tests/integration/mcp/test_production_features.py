@@ -5,7 +5,7 @@ import anyio
 import pytest
 from PIL import Image
 
-import server
+from silhouette_mcp import server
 
 
 # ------------------------------------------------------------------ 1. MCP v2 Errors & Annotations
@@ -18,11 +18,12 @@ async def test_mcp_v2_preserves_anticipated_error_messages():
     async with Client(server.mcp) as client:
         tools_res = await client.list_tools()
         names = {t.name for t in tools_res.tools}
-        assert len(names) == 27
+        assert len(names) == 28
         for expected in (
             "silhouette_add_text",
             "silhouette_offset_shape",
             "silhouette_grid_duplicates",
+            "silhouette_nest_shapes",
             "silhouette_add_registration_marks",
             "silhouette_add_box_template",
             "silhouette_render_preview",
@@ -241,10 +242,11 @@ def test_offset_shape_circle_and_polygons():
     spike_out = server.silhouette_offset_shape("off_test", spike["shape_id"], offset_mm=3.0, join="miter")
     assert spike_out["shape_id"] > 0
 
-    # Poligono de area zero
-    flat = server.silhouette_add_polyline("off_test", [[10, 10], [20, 10], [30, 10]], closed=True)
+    # Poligono de area zero deve ser rejeitado em polyline fechada e em _offset_polygon
     with pytest.raises(ValueError, match="zero area"):
-        server.silhouette_offset_shape("off_test", flat["shape_id"], offset_mm=2.0)
+        server.silhouette_add_polyline("off_test", [[10, 10], [20, 10], [30, 10]], closed=True)
+    with pytest.raises(ValueError, match="zero area"):
+        server._offset_polygon([[10, 10], [20, 10], [30, 10]], 2.0, "round")
 
     # Erros de validacao
     open_line = server.silhouette_add_line("off_test", 10, 10, 50, 10)
@@ -458,12 +460,13 @@ def test_additional_edge_cases_and_platform_paths(tmp_path, monkeypatch):
         monkeypatch.setattr(server, "_FONT_DIRS", [tmp_path])
         assert server._resolve_font_path("customdisplay") == fake_font
 
-    # 4. MAX_SHAPES em duplicate_shape, grid_duplicates e import_svg
+    # 4. MAX_SHAPES atomico em duplicate_shape, grid_duplicates e import_svg
     r = server.silhouette_add_rectangle("edge_extra", 20, 20, 10, 10)
     cur_count = len(server.silhouette_get_design("edge_extra")["shapes"])
     monkeypatch.setattr(server, "MAX_SHAPES", cur_count + 2)
-    dup_cap = server.silhouette_duplicate_shape("edge_extra", r["shape_id"], dx_mm=12, count=5)
-    assert dup_cap["count"] == 2
+    with pytest.raises(ValueError, match="limit of"):
+        server.silhouette_duplicate_shape("edge_extra", r["shape_id"], dx_mm=12, count=5)
+    assert len(server.silhouette_get_design("edge_extra")["shapes"]) == cur_count
     with pytest.raises(ValueError, match="limit of"):
         server.silhouette_grid_duplicates("edge_extra", r["shape_id"], cols=2, rows=2)
 
@@ -472,7 +475,7 @@ def test_additional_edge_cases_and_platform_paths(tmp_path, monkeypatch):
         '<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="10" height="10"/></svg>',
         encoding="utf-8",
     )
-    monkeypatch.setattr(server, "MAX_SHAPES", cur_count + 2)
+    monkeypatch.setattr(server, "MAX_SHAPES", cur_count)
     with pytest.raises(ValueError, match="too many paths"):
         server.silhouette_import_svg("edge_extra", str(svg_many))
 

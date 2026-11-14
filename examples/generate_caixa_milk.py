@@ -1,10 +1,9 @@
-import math
 import sys
 from pathlib import Path
 
-# Adiciona o diretorio raiz do MCP
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import server
+# Adiciona o diretorio src do MCP
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from silhouette_mcp import server
 
 def create_caixa_milk_luxo():
     design_name = "caixa_milk_luxo"

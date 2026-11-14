@@ -1,6 +1,6 @@
 import math
 import pytest
-import server
+from silhouette_mcp import server
 
 def test_slug():
     assert server._slug("My Design 01!") == "My-Design-01"
