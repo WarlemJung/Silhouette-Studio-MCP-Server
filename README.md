@@ -11,7 +11,7 @@ Because Silhouette Studio exposes no public live API, this server models designs
 - **28 MCP Tools** covering canvas presets, geometric primitives, TrueType/OpenType text vectorization (`fontTools` + built-in geometric vector fallback), hardened contour offsetting (`round` / `miter` / `bevel`), deterministic **2D sheet nesting** (`silhouette_nest_shapes` via MaxRects), grid duplication, transforms with `flip_x` / `flip_y`, hardened SVG path import, Print & Cut registration marks, parametric packaging templates, PNG visual proofs, DXF/SVG export, and Silhouette Studio launch.
 - **Layer & Line-Color Workflow**: Built-in layer mapping (`CUT`, `SCORE`/`FOLD`, `PERF`, `ENGRAVE`, `REGMARK`) using AutoCAD Color Index (ACI) values for DXF and matching hex strokes for SVG/PNG so Silhouette Studio's *Cut by Line Color* panel separates cut lines from creases and perforations automatically.
 - **Inter-Process Concurrency & Crash Recovery**: Protected by `_InterProcessLock` (combining re-entrant `threading.RLock` with OS-level locking on `.silhouette.lock` via `msvcrt.locking` on Windows and `fcntl.flock` on POSIX), `os.fsync` atomic temp-file writes, monotonically incremented `revision` tracking, and automatic recovery from `.design.json.bak` on corrupted primary files.
-- **Security & Hard Limits**: Rejects `bool`-as-int coercion, `NaN`/`inf`, extreme coordinates (`abs <= 100000 mm`), oversized canvases (`10..5000 mm`), oversized text (`<= 500` chars), self-intersecting closed contours, XML DTD/`<!ENTITY`/`<script`/external URI payloads in SVG (`10 MB`, `10000` elements, depth `64`, `100000` points, `defusedxml` when available), and atomically enforces `MAX_SHAPES = 5000` across all batch tools.
+- **Security & Hard Limits**: Rejects `bool`-as-int coercion, `NaN`/`inf`, extreme coordinates (`abs <= 100000 mm`), oversized canvases (`10..5000 mm`), oversized text (`<= 500` chars), self-intersecting closed contours, XML DTD/`<!ENTITY`/`<script`/external URI payloads in SVG (`10 MB`, `10000` elements, depth `64`, `100000` points, `defusedxml` XML hardening), strict `allow_nan=False` JSON persistence, and atomically enforces `MAX_SHAPES = 5000` across all batch tools.
 - **MCP v2 Error Reporting, Annotations & STDIO Hygiene**: Dual-inheritance exceptions (`SilhouetteValueError`, `SilhouetteRuntimeError`) preserve full diagnostic messages in MCP v2 `is_error=True` tool responses while remaining standard `ValueError`/`RuntimeError` subclasses for Python callers. Operational logs route exclusively to `sys.stderr` so JSON-RPC `stdout` is never corrupted.
 - **Clean Silhouette-Ready DXF**: Sets `$INSUNITS`/`$EXTMIN`/`$EXTMAX` headers, avoids duplicate closing vertices on closed polylines (`LWPOLYLINE`), and flattens curves within a `0.05 mm` chord tolerance (`CHORD_TOL_MM`).
 
@@ -21,6 +21,7 @@ Because Silhouette Studio exposes no public live API, this server models designs
 
 - **Python**: `>= 3.10`
 - **Dependencies** (`pyproject.toml`):
+  - `defusedxml>=0.7.1`
   - `mcp>=1.3.0`
   - `ezdxf>=1.4.0`
   - `svgelements>=1.9.0`
@@ -184,8 +185,10 @@ If installed as a package (`pip install -e .`), you can also launch the console 
 - [`docs/architecture.md`](docs/architecture.md) — Layered `server -> tools -> services -> {core, persistence, exporters, integrations}` architecture, dependency matrix, and STDIO transport isolation.
 - [`docs/geometry.md`](docs/geometry.md) — Y-down/CAD Y-up coordinate mapping, polygon validation, self-intersection detection, and hardened contour offsetting.
 - [`docs/nesting.md`](docs/nesting.md) — Modular `core/nesting/` 2D MaxRects (`BSSF + BAF`) packing domain, collision/clearance validation, and `REGMARK` preservation.
+- [`docs/persistence.md`](docs/persistence.md) — Transactional `_save` commit semantics, `_InterProcessLock`, stale temp cleanup, and `.design.json.bak` recovery.
 - [`docs/security.md`](docs/security.md) — SVG/XXE protections, numeric/capacity bounds, atomic batch enforcement, and desktop subprocess security.
-- [`docs/testing.md`](docs/testing.md) — Layered automated test suite (`unit/`, `integration/`, `regression/`, `performance/`), real STDIO end-to-end integration, and benchmarks.
+- [`docs/testing.md`](docs/testing.md) — Layered automated test suite (`unit/`, `integration/`, `regression/`, `performance/`), CI coverage gate, real STDIO E2E tests, and benchmarks.
+- [`docs/manual-homologation.md`](docs/manual-homologation.md) — Visual GUI and physical cutter homologation protocol (`Status: Não executado`).
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (`0.2.0` -> `1.0.0` -> `1.1.0`).
 
 ---
@@ -210,12 +213,12 @@ If installed as a package (`pip install -e .`), you can also launch the console 
 
 ## Package Architecture
 
-The project follows a clean layered `src/` + categorized `tests/` layout configured in [`pyproject.toml`](pyproject.toml) (`silhouette-studio-mcp = "silhouette_mcp.server:main"`), organizing responsibilities under [`src/silhouette_mcp/`](src/silhouette_mcp/__init__.py) and tests into `unit/{core,services,tools,exporters,persistence}/`, `integration/{mcp,persistence,studio}/`, `regression/`, `performance/`, and `fixtures/`:
+The project follows a clean layered `src/` + categorized `tests/` layout configured in [`pyproject.toml`](pyproject.toml) (`silhouette-studio-mcp = "silhouette_mcp.server:main"`) with CI automation in [`.github/workflows/tests.yml`](.github/workflows/tests.yml), organizing responsibilities under [`src/silhouette_mcp/`](src/silhouette_mcp/__init__.py) and tests into `unit/{core,services,tools,exporters,persistence}/`, `integration/{mcp,persistence,studio}/`, `regression/`, `performance/`, and `fixtures/`:
 
 - `src/silhouette_mcp/config/settings.py`: Presets, layer palettes, limits, `_DynamicStderrHandler`, and monkeypatch-transparent runtime resolution (`get_runtime_attr()`).
-- `src/silhouette_mcp/core/` & `core/nesting/`: Exceptions & MCP v1/v2 shims (`exceptions.py`), validators (`validators.py`), shape models (`models.py`), 2D geometry/offset engine (`geometry_engine.py`), and pure 2D nesting domain (`nesting/{models,collision,maxrects,metrics}.py`).
-- `src/silhouette_mcp/persistence/`: Cross-process `.silhouette.lock` (`_InterProcessLock`) & atomic writes (`storage.py`) plus `.design.json.bak` crash recovery (`repository.py`).
-- `src/silhouette_mcp/exporters/` & `integrations/`: DXF, SVG, and PNG exporters plus Windows/OS Silhouette Studio launcher (`silhouette_studio.py`).
+- `src/silhouette_mcp/core/`, `core/nesting/` & `core/templates/`: Exceptions & MCP v1/v2 shims (`exceptions.py`), validators (`validators.py`), shape models (`models.py`), 2D geometry/offset engine (`geometry_engine.py`), pure 2D nesting domain (`nesting/{models,collision,maxrects,metrics}.py`), and pure 2D packaging dieline builders (`templates/{models,geometry,generators}.py`).
+- `src/silhouette_mcp/persistence/`: Cross-process `.silhouette.lock` (`_InterProcessLock`), stale temp cleanup (`_cleanup_stale_temp_files`) & atomic writes (`storage.py`), plus transactional `.design.json.bak` crash recovery (`repository.py`).
+- `src/silhouette_mcp/exporters/` & `integrations/`: DXF, SVG, and PNG exporters plus Windows/macOS Silhouette Studio launcher (`silhouette_studio.py`).
 - `src/silhouette_mcp/services/`: Use-case orchestration layer (`document_service`, `geometry_service`, `nesting_service`, `export_service`, `import_service`, `template_service`) decoupled from MCP transport.
 - `src/silhouette_mcp/tools/` & `server.py`: 28 thin MCP adapter tools registered centrally via `TOOL_REGISTRATIONS` (self-bootstrapping STDIO entrypoint).
 
@@ -225,17 +228,17 @@ See [`docs/architecture.md`](docs/architecture.md) for the full layered diagram 
 
 ## Testing, Benchmarks & Verification
 
-Run the automated test suite with coverage reporting:
+Run the automated test suite with the minimum coverage gate (`fail_under = 92` configured in [`pyproject.toml`](pyproject.toml)):
 
 ```bash
-python -m pytest -v -p no:cacheprovider --cov=silhouette_mcp --cov-report=term-missing
+python -m pytest -v -p no:cacheprovider --cov=silhouette_mcp --cov-report=term-missing --cov-fail-under=92
 ```
 
-All tests automatically isolate `SILHOUETTE_OUTPUT_DIR` to a temporary directory via [`tests/conftest.py`](tests/conftest.py) and mock OS GUI launches. Latest verified status: **94 passed, 0 failed, 0 skipped**, **96% line coverage** (`2224` statements across `src/silhouette_mcp/`), covering:
+All tests automatically isolate `SILHOUETTE_OUTPUT_DIR` to a temporary directory via [`tests/conftest.py`](tests/conftest.py) and mock OS GUI launches. GitHub Actions CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) validates Windows Latest and Ubuntu Latest across Python `3.11`, `3.12`, and `3.13`. Latest local verified status: **112 passed (`52` unit + `60` integration/regression/performance), 0 failed, 0 skipped**, **96% (`95.85%`) line coverage** (`2624` statements across `41` modules in `src/silhouette_mcp/`), covering:
 - Strict AST architectural dependency boundaries across `core/`, `services/`, and `tools/`
-- Pure `core/nesting/` unit validation + deterministic MaxRects 2D nesting invariants (`tests/unit/core/test_nesting.py`)
-- Direct `services/` orchestration tests + 4-process parallel concurrency (`subprocess.Popen` + `_InterProcessLock`) and `.design.json.bak` crash recovery
+- Pure `core/nesting/` & `core/templates/` unit validation, curve geometry, and deterministic 2D packing/dieline invariants
+- Direct `services/` orchestration tests, transactional fault-injected persistence rollback/backup preservation, 4-process parallel concurrency (`subprocess.Popen` + `_InterProcessLock`), and `.design.json.bak` crash recovery
 - Hardened convex, concave, self-intersecting, and inradius-exceeded contour offsets + seeded property invariants
 - Atomic `MAX_SHAPES = 5000` batch guards and SVG XXE/`<script>`/depth/element/URI protections
 - Unmocked real MCP STDIO JSON-RPC client-server end-to-end execution (`list_tools`, `new_design`, `add_rectangle`, `add_text`, `nest_shapes`, `export dxf/svg/png`, `delete_design`)
-- Automated performance sanity checks in `tests/performance/test_benchmarks.py` (with full `100` to `5,000` shape scale tables published in [`docs/testing.md`](docs/testing.md))
+- Automated performance sanity checks in `tests/performance/test_benchmarks.py` (with full `100` to `5,000` shape scale tables published in [`docs/testing.md`](docs/testing.md); manual GUI/plotter homologation tracked in [`docs/manual-homologation.md`](docs/manual-homologation.md))

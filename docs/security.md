@@ -18,7 +18,7 @@
 
 - Rejects null bytes, resolves paths safely, requires `.svg` extension and existing regular file, and enforces strict `10 MB` (`MAX_SVG_BYTES`) file size limit and strict UTF-8 decoding.
 - Blocks `<!ENTITY`, `<!DOCTYPE ... SYSTEM/PUBLIC>`, `<script`, `javascript:`, and `url(http|https|ftp|file:...)` markup before XML parsing.
-- Parses XML using `defusedxml.ElementTree` when available (preventing XML entity expansion / DTD retrieval), falling back to safe structural checks if absent.
+- Parses XML using `defusedxml.ElementTree` (preventing XML entity expansion / DTD retrieval), combined with structural validation.
 - Validates root element tag is `<svg>` (namespace-agnostic).
 - Bounds XML tree depth to `MAX_SVG_DEPTH = 64` and element count to `MAX_SVG_ELEMENTS = 10000`.
 - Rejects `http://`, `https://`, `ftp://`, and `file://` external references in `href` / `xlink:href` / `src` attributes (local image filenames are skipped non-fatally and logged in warnings).
@@ -42,7 +42,8 @@
 ### 4. Serialization, Lock & Layer Sanitization
 
 - Cross-process exclusive OS lock (`.silhouette.lock`) + per-process re-entrant `threading.RLock`.
-- Atomic write (`tempfile.NamedTemporaryFile(..., delete=False)` + `flush` + `os.fsync` + retryable `os.replace`) and `.design.json.bak` mirror recovery.
+- Transactional save (`_prepare_save_payload` schema validation & strict `json.dumps(..., allow_nan=False)`, `_cleanup_stale_temp_files`, pre-replace `.bak` preservation, `NamedTemporaryFile(..., delete=False)` + `flush` + `os.fsync` + retryable `os.replace`, post-commit `revision` increment) and `.design.json.bak` mirror recovery (detailed in [`docs/persistence.md`](persistence.md)).
 - Design names are sanitized via `_slug()`, and SVG layer `<g id="...">` attributes sanitize unsafe XML characters (`re.sub(r"[^A-Za-z0-9_-]+", "-", layer)`).
 - Operational logging is strictly isolated to `sys.stderr`, preventing JSON-RPC protocol injection or corruption on `stdout`.
+- GitHub Actions CI ([`.github/workflows/tests.yml`](../.github/workflows/tests.yml)) enforces least-privilege `contents: read` permissions with no secrets or `pull_request_target` execution.
 

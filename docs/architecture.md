@@ -25,6 +25,9 @@ server.py  ──▶  tools/ (MCP input adapters)
 
 ```text
 silhouette_studio_mcp/
+├── .github/
+│   └── workflows/
+│       └── tests.yml                  # Cross-platform CI matrix (Windows + Ubuntu, Python 3.11–3.13, >= 92% coverage)
 ├── .gitignore
 ├── CHANGELOG.md
 ├── README.md
@@ -32,7 +35,9 @@ silhouette_studio_mcp/
 ├── docs/
 │   ├── architecture.md
 │   ├── geometry.md
+│   ├── manual-homologation.md         # Manual GUI visual & physical cutter homologation protocol (`Não executado`)
 │   ├── nesting.md
+│   ├── persistence.md                 # Transactional `_save`, `_InterProcessLock`, stale cleanup & `.bak` recovery
 │   ├── security.md
 │   └── testing.md
 ├── examples/
@@ -51,12 +56,17 @@ silhouette_studio_mcp/
 │       │   ├── geometry_engine.py     # 2D polygon cleanup, self-intersection detection, offsetting, curves
 │       │   ├── models.py              # Shape bounding boxes, area calculation, deep cloning, cut warnings
 │       │   ├── validators.py          # Strict numeric/integer/slug/layer/shape-capacity & schema validators
-│       │   └── nesting/
+│       │   ├── nesting/
+│       │   │   ├── __init__.py
+│       │   │   ├── models.py          # `NestingConfig`, `NestingCandidate`, `PlacementDecision`, `NestingMetrics`
+│       │   │   ├── collision.py       # AABB overlap, clearance, bounds validation, REGMARK obstacles, composite groups
+│       │   │   ├── maxrects.py        # `_maxrects_subtract`, rotation sampling, MaxRects BSSF+BAF packer
+│       │   │   └── metrics.py         # Dual bbox + true-area utilization & bounding envelope metrics
+│       │   └── templates/
 │       │       ├── __init__.py
-│       │       ├── models.py          # `NestingConfig`, `NestingCandidate`, `PlacementDecision`, `NestingMetrics`
-│       │       ├── collision.py       # AABB overlap, clearance, bounds validation, REGMARK obstacles
-│       │       ├── maxrects.py        # `_maxrects_subtract`, rotation sampling, MaxRects BSSF+BAF packer
-│       │       └── metrics.py         # Dual bbox + true-area utilization & bounding envelope metrics
+│       │       ├── models.py          # `BoxTemplateSpec`, `SUPPORTED_BOX_TEMPLATES`
+│       │       ├── geometry.py        # Pure curve primitives (`_milk_arch_pts`, `_bow_arc`)
+│       │       └── generators.py      # Parametric dieline builders & `generate_box_template_shapes`
 │       ├── exporters/
 │       │   ├── __init__.py
 │       │   ├── dxf.py                 # `_write_dxf` (AutoCAD R2000 `LWPOLYLINE`/mm `$INSUNITS` + R12 `POLYLINE`)
@@ -67,8 +77,8 @@ silhouette_studio_mcp/
 │       │   └── silhouette_studio.py   # `_find_studio_exe`, OS-safe subprocess launch (`silhouette_open_in_studio`)
 │       ├── persistence/
 │       │   ├── __init__.py
-│       │   ├── repository.py          # Locked `load_design`/`save_design` (`_load`/`_save`), `.bak` crash recovery, `_add`
-│       │   └── storage.py             # `_InterProcessLock` (`msvcrt`/`fcntl`), `_atomic_replace`, `_atomic_write_file`
+│       │   ├── repository.py          # Transactional `_save`/`save_design`, `_preserve_existing_backup`, `.bak` recovery
+│       │   └── storage.py             # `_InterProcessLock` (`msvcrt`/`fcntl`), `_atomic_replace`, `_cleanup_stale_temp_files`
 │       ├── services/
 │       │   ├── __init__.py
 │       │   ├── document_service.py    # Document lifecycle, presets, inspection, shape deletion
@@ -76,7 +86,7 @@ silhouette_studio_mcp/
 │       │   ├── nesting_service.py     # Orchestrates `core.nesting` + persistence locks
 │       │   ├── export_service.py      # DXF/SVG/PNG export, previews, calibration file, Studio delegation
 │       │   ├── import_service.py      # SVG XML hardening, `svgelements` path flattening, scale & placement
-│       │   └── template_service.py    # Parametric packaging dielines (milk box, cube, pillow, gift tag)
+│       │   └── template_service.py    # Service orchestration delegating pure dieline construction to `core.templates`
 │       └── tools/
 │           ├── __init__.py
 │           ├── document.py            # Thin MCP adapters -> `document_service` (8 tools)

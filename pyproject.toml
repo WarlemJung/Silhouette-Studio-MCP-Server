@@ -63,3 +63,11 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["silhouette_mcp"]
+
+[tool.coverage.report]
+fail_under = 92
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

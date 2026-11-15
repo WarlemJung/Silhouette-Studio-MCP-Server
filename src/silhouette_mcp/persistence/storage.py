@@ -148,3 +148,26 @@ def _atomic_write_file(target_path: Path, suffix: str, writer: Any) -> None:
                 pass
         raise
 
+
+def _cleanup_stale_temp_files(
+    directory: Path,
+    pattern: str = "*.tmp",
+    max_age_s: float = 3600.0,
+) -> int:
+    """Remove abandoned atomic-write temporary files older than ``max_age_s``."""
+    if not directory.is_dir():
+        return 0
+    cutoff = time.time() - max(0.0, float(max_age_s))
+    removed = 0
+    for candidate in directory.glob(pattern):
+        try:
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            if max_age_s <= 0.0 or candidate.stat().st_mtime <= cutoff:
+                candidate.unlink()
+                removed += 1
+        except OSError as exc:  # pragma: no cover
+            logger.debug("Skipping stale temp cleanup for '%s': %s", candidate, exc)
+    return removed
+
+

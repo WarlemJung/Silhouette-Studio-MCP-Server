@@ -1,0 +1,69 @@
+name: CI Tests & Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install package and dev dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Verify console entry point registration
+        run: python -c "import shutil; from importlib.metadata import entry_points; eps = [e for e in entry_points(group='console_scripts') if e.name == 'silhouette-studio-mcp']; assert len(eps) == 1, eps; assert shutil.which('silhouette-studio-mcp'), 'console script not found on PATH'; print('Entry point:', eps[0].value)"
+
+      - name: Compile Python bytecode across src, tests, and examples
+        run: python -m compileall -q src tests examples
+
+      - name: Verify MCP tool registration count (28 tools)
+        run: python -c "import silhouette_mcp.server as s; n = len(s.TOOL_REGISTRATIONS); assert n == 28, n; print(f'Registered MCP tools: {n}')"
+
+      - name: Run architectural AST and MCP adapter contract checks
+        run: python -m pytest tests/unit/tools/test_mcp_adapters.py -v -p no:cacheprovider
+
+      - name: Run unit test suite
+        run: python -m pytest tests/unit -v -p no:cacheprovider --cov=silhouette_mcp --cov-fail-under=0 --cov-report=
+
+      - name: Run integration, regression, and performance suites with coverage gate
+        run: python -m pytest tests/integration tests/regression tests/performance -v -p no:cacheprovider --cov=silhouette_mcp --cov-append --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=92
+
+      - name: Upload coverage XML artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 14
