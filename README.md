@@ -1,5 +1,7 @@
 # Silhouette Studio MCP Server (`v1.1.0`)
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/warlemjung-silhouette-studio-mcp-server-m2dytz?v=eb56680a53f20ca166239684c1dace7a)](https://m8ven.ai/mcp/warlemjung-silhouette-studio-mcp-server-m2dytz?s=readme)
+
 A production-hardened **Model Context Protocol (MCP)** server (stdio) for programmatically creating, validating, nesting, previewing, and exporting vector cut designs in millimetres (`mm`) for **Silhouette Studio** (including Standard/Basic Edition, which opens DXF files natively but does not import SVG natively).
 
 Because Silhouette Studio exposes no public live API, this server models designs as persistent `.design.json` scenes, converts vector geometry, external SVGs, TrueType/OpenType text, offsets, registration marks, nested layouts, and parametric box dielines into clean **DXF** (`R2000`/`R12`), **SVG**, and **PNG preview** files, and opens them directly in Silhouette Studio.
